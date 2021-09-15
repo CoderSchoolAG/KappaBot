@@ -1,0 +1,171 @@
+import discord
+import os
+from dotenv import load_dotenv
+from bs4 import BeautifulSoup
+import lxml
+import requests
+from random import randint
+from enum import IntEnum
+from selenium import webdriver
+from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.chrome.options import Options
+from time import sleep
+
+load_dotenv()
+TOKEN = os.getenv("DISCORD_TOKEN")
+
+client = discord.Client()
+
+montyQuotes = [
+    "If she floats, she's a witch.",
+    "I didn't expect the Spanish Inquisition.",
+    "'Tis but a scratch!",
+    "When I say the name . . . Biggus . . . Dickus.",
+    "Throw him to the floor, sir? Yes, yes, throw him to the floor.",
+    "Judean People's Front . . . we're the people's Front Of Judea.",
+    "Ni.",
+    "I wish to register a complaint.",
+    "[insert Terry Gilliam animation]"]
+
+
+
+@client.event
+async def on_ready():
+    print(str(client.user) + " has connected!")
+
+@client.event
+async def on_message(message):
+
+
+    if " " in message.content:
+        breakpoint = message.content.find(" ")
+        command = message.content.lower()[:breakpoint]
+        parameter = message.content[breakpoint+1:]
+    else:
+        command = message.content
+        parameter = ""
+
+    if command == "!wiki":
+        try:
+            url = "https://en.wikipedia.org/wiki/" + parameter
+
+            req = requests.get(url)
+            req.raise_for_status()
+
+            soup = BeautifulSoup(req.text, "html.parser")
+
+            parts = soup.select("p")
+            title = soup.select("h1")[0].getText()
+            paragraph = ""
+
+            for part in parts:
+                if part.getText() != "\n":
+                    paragraph = part.getText()
+
+                    while "[" in paragraph:
+                        paragraph = paragraph[0:paragraph.index("[")] + paragraph[paragraph.index("]") + 1:]
+
+                    break
+
+
+
+        except requests.exceptions.HTTPError:
+            await message.channel.send("*Error loading webpage.*" "\n")
+
+        finally:
+            if "may refer to" in paragraph:
+                await message.channel.send("*That topic did not have a direct redirect, try again*" + "\n")
+            else:
+                await message.channel.send("**" + title + "**" + "\n" + paragraph)
+
+    if command == "!mpq":
+        await message.channel.send(montyQuotes[randint(0, len(montyQuotes)-1)])
+
+    if command == "!rps":
+        valid_inputs = ["rock", "paper", "scissors", "r", "p", "s"]
+
+        class rps(IntEnum):
+            Rock = 1,
+            Paper = 2,
+            Scissors = 3
+
+        string_to_rps = {
+            "rock": rps.Rock,
+            "paper": rps.Paper,
+            "scissors": rps.Scissors,
+            "r": rps.Rock,
+            "p": rps.Paper,
+            "s": rps.Scissors
+        }
+
+        await message.channel.send("Type Rock, Paper, or Scissors")
+
+        msg = await client.wait_for("message", check = lambda m : m.content.lower() in valid_inputs)
+
+        computer_choice = rps(randint(1,3))
+        player_choice = string_to_rps[msg.content.lower()]
+
+        await message.channel.send("Computer: " + computer_choice.name + "\nPlayer: " + player_choice.name)
+
+        if computer_choice == player_choice:
+            await message.channel.send("TIE")
+        elif (computer_choice == rps.Rock and player_choice == rps.Paper) or \
+                (computer_choice == rps.Paper and player_choice == rps.Scissors) or \
+                (computer_choice == rps.Scissors and player_choice == rps.Rock):
+            await message.channel.send("You Win!")
+        else:
+            await message.channel.send("git rekt, Loser")
+
+
+
+    if command == "!coinflip":
+        msg = ""
+
+        if parameter.strip().isdigit():
+            for i in range(int(parameter)):
+                msg += "Toss #" + i + ":\t" + "Heads" if randint(1,2) == 1 else "Tails"
+            await message.channel.send(msg)
+        else:
+            await message.channel.send("Heads" if randint(1,2) == 1 else "Tails")
+
+    if command == "!youtube":
+            url = "https://www.youtube.com/results?search_query=" + parameter.replace(" ", "+")
+
+            driver_path = "c:\Selenium\chromedriver.exe"
+            o = Options()
+            o.add_argument("--headless")
+
+            driver = webdriver.Chrome(executable_path=driver_path, options=o)
+
+            driver.get(url)
+            sleep(1)
+
+            soup = BeautifulSoup(driver.page_source, "lxml")
+            driver.quit()
+            watch = soup.find("a", {"id" : "video-title"})
+            player = watch.get("href")
+            url2 = "https://www.youtube.com/" + player
+            msg = url2
+            await message.channel.send(msg)
+
+    if command == "!shop":
+        url = "https://www.amazon.com/s?k=" + parameter.replace(" ", "+") + "&ref=nb_sb_noss_1"
+
+        driver_path = "c:\Selenium\chromedriver.exe"
+        o = Options()
+        o.add_argument("--headless")
+
+        driver = webdriver.Chrome(executable_path=driver_path, options=o)
+
+        driver.get(url)
+        sleep(1)
+
+        soup = BeautifulSoup(driver.page_source, "lxml")
+        driver.quit()
+        searchResult = soup.find("a", {"class": "a-link-normal a-text-normal"})
+        karen = searchResult.get("href")
+        url2 = "https://www.amazon.com/" + karen
+        msg = url2
+        await message.channel.send(msg)
+
+client.run(TOKEN)
